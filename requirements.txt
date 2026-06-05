@@ -1,0 +1,3 @@
+# For now, only standard library is used
+# pytest for tests
+pytest

@@ -1,0 +1,9 @@
+{
+  "ignore_patterns": ["*.tmp", "*.bak", "~$*", ".~lock.*", "*.crdownload", "*.part", "__pycache__/*"],
+  "media_date_grouping": true,
+  "default_actions": {
+    "pdf": "Documents",
+    "jpg": "Images",
+    "png": "Images"
+  }
+}
