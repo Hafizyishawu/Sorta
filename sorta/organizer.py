@@ -10,6 +10,20 @@ class FileOrganizer:
         self.files_metadata = files_metadata
         self.base_dir = base_dir
 
+    def _category_target_base(self, category):
+        # Anchor the category folder to base_dir, but collapse any leading parts
+        # that base_dir already represents. Running inside ~/Documents must reuse
+        # that folder as the single "Documents" parent (-> ~/Documents/Word)
+        # rather than nesting another like-named folder (~/Documents/Documents/
+        # Word). Without this, repeated runs stack Documents/Documents/Documents.
+        rel_parts = ExtensionMapper.get_folder(category).split(os.sep)
+        base_name = os.path.basename(os.path.normpath(self.base_dir))
+        while rel_parts and rel_parts[0].lower() == base_name.lower():
+            rel_parts.pop(0)
+        if not rel_parts:
+            return self.base_dir
+        return os.path.join(self.base_dir, *rel_parts)
+
     def _longest_common_prefix(self, strings):
         if not strings:
             return ''
@@ -45,7 +59,7 @@ class FileOrganizer:
             for file in files:
                 prefix = base_name(file)
                 groups.setdefault(prefix, []).append(file)
-            target_folder_base = os.path.join(self.base_dir, ExtensionMapper.get_folder(category))
+            target_folder_base = self._category_target_base(category)
             for prefix, group_files in groups.items():
                 # Only nest into a name-prefix subfolder when more than one file
                 # shares that prefix. A lone file goes straight into the category
