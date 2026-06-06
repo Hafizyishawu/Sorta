@@ -1,0 +1,8 @@
+# Optional dependencies. The CLI works without these; they enable richer output.
+# rich powers formatted tables and panels in an interactive terminal. When
+# absent, sorta falls back to plain text automatically.
+rich>=13.0
+# send2trash routes deletions to the native OS Trash (Finder on macOS) so files
+# appear in the system Trash with Put Back. Without it, sorta uses its own
+# recoverable internal trash instead.
+send2trash>=1.8
