@@ -1,5 +1,6 @@
 import builtins
 import os
+import pytest
 from sorta import cli
 from sorta.scanner import FileScanner
 from sorta.trash_manager import TrashManager
@@ -28,6 +29,16 @@ def test_show_organization_moves_into_category_folder(tmp_path, monkeypatch):
 
     assert (tmp_path / "Audio" / "song.mp3").exists()
     assert not (tmp_path / "song.mp3").exists()
+
+
+def test_version_flag_prints_version_and_exits(monkeypatch, capsys):
+    from sorta import __version__
+
+    monkeypatch.setattr("sys.argv", ["sorta", "--version"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 0
+    assert __version__ in capsys.readouterr().out
 
 
 def test_global_flags_accepted_after_subcommand(tmp_path, monkeypatch, capsys):
