@@ -1,5 +1,6 @@
 import argparse
 import os
+from sorta import __version__
 from sorta.scanner import FileScanner
 from sorta.duplicate_finder import DuplicateFinder
 from sorta.dormant_detector import DormantFileDetector
@@ -253,6 +254,7 @@ def main():
     common.add_argument('--sorta-trash', action='store_true', dest='sorta_trash', default=argparse.SUPPRESS, help="Use sorta's recoverable internal trash instead of the native OS Trash")
 
     parser = argparse.ArgumentParser(description='Sorta - Smart Filesystem Manager', parents=[common])
+    parser.add_argument('--version', action='version', version=f'sorta {__version__}')
     parser.add_argument('directory', help='Directory to scan')
     subparsers = parser.add_subparsers(dest='command', required=False)
 
