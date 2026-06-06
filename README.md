@@ -11,7 +11,8 @@ Sorta is an intelligent AI-powered filesystem management system. It scans your f
 
 ## Usage
 ```bash
-python -m sorta.cli /path/to/scan <command> [options]
+sorta /path/to/scan <command> [options]
+# or without installing: python -m sorta.cli /path/to/scan <command> [options]
 ```
 
 Commands:
@@ -40,8 +41,14 @@ Deletions move files to a trash directory by default and can be restored until `
 
 Scheduled runs are restricted to read-only commands (default `recommend`): an unattended job has no one to confirm deletion prompts.
 
+## Install
+```bash
+pip install -e .            # provides the `sorta` command
+pip install -e '.[enhanced]'  # also installs rich + send2trash (formatted output, native OS Trash)
+```
+
 ## Requirements
-- Python 3.7+
+- Python 3.8+
 - pytest (for tests)
 - `rich` (optional) — enables formatted tables and panels in an interactive terminal; without it, output falls back to plain text. Install with `pip install -r requirements-optional.txt`.
 
