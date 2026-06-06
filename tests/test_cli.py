@@ -64,6 +64,33 @@ def test_delete_matches_keyword_and_spares_others(tmp_path, monkeypatch):
     assert (tmp_path / "keep_me.txt").exists()
 
 
+def test_dry_run_delete_reports_but_does_not_delete(tmp_path, monkeypatch, capsys):
+    target = tmp_path / "apex_thing.log"
+    target.write_text("x")
+
+    def fail(*_):
+        raise AssertionError("dry-run must not prompt")
+
+    monkeypatch.setattr(builtins, "input", fail)
+    files = FileScanner(str(tmp_path)).scan()
+    tm = TrashManager(str(tmp_path), use_os_trash=False)
+    cli.show_delete(files, keywords=["apex"], apply=True, trash_manager=tm, dry_run=True)
+
+    assert target.exists()
+    out = capsys.readouterr().out
+    assert "[dry-run] Would delete" in out
+
+
+def test_dry_run_organization_reports_but_does_not_move(tmp_path, capsys):
+    (tmp_path / "song.mp3").write_bytes(b"a")
+    files = FileScanner(str(tmp_path)).scan()
+    cli.show_organization(files, str(tmp_path), apply=True, dry_run=True)
+
+    assert (tmp_path / "song.mp3").exists()
+    assert not (tmp_path / "Audio").exists()
+    assert "[dry-run] Would move" in capsys.readouterr().out
+
+
 def test_delete_preview_does_not_delete(tmp_path, capsys):
     target = tmp_path / "apex_thing.log"
     target.write_text("x")

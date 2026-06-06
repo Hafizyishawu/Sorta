@@ -18,6 +18,32 @@ except ImportError:
 _SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
 
+class _ScanProgress:
+    # A live "Scanning… N files" spinner on stderr (so it never pollutes stdout
+    # or JSON). Becomes a no-op when rich is absent or stderr is not a terminal.
+    def __init__(self, active):
+        self._status = Console(stderr=True).status("Scanning…") if active else None
+
+    def __enter__(self):
+        if self._status:
+            self._status.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        if self._status:
+            return self._status.__exit__(*exc)
+        return False
+
+    def update(self, count):
+        if self._status:
+            self._status.update(f"Scanning… {count} files")
+
+
+def scan_progress():
+    active = _RICH_AVAILABLE and hasattr(sys.stderr, 'isatty') and sys.stderr.isatty()
+    return _ScanProgress(active)
+
+
 def format_size(num_bytes):
     """Human-readable size using binary (1024) steps, matching the MB labels
     the rest of the tool already shows to users."""
@@ -186,3 +212,242 @@ def render_scan(files, limit=None, show_all=False, plain=False, as_json=False, s
         return
     for line in _scan_plain_lines(files, summary, limit, now=now):
         print(line, file=stream)
+
+
+def _files_json(files):
+    return [{'path': f['path'], 'size': f['size']} for f in files]
+
+
+def recommendations_json(recs):
+    out = {}
+    for rec in recs:
+        kind = rec['type']
+        if kind == 'largest_files':
+            out['largest_files'] = _files_json(rec['files'])
+        elif kind == 'file_type_breakdown':
+            out['file_type_breakdown'] = [
+                {'extension': ext or '', 'count': count} for ext, count in rec['breakdown']
+            ]
+        elif kind == 'dormant_files':
+            out['dormant_files'] = _files_json(rec['files'])
+        elif kind == 'duplicate_groups':
+            out['duplicate_groups'] = [_files_json(group) for group in rec['groups']]
+        elif kind == 'largest_folders':
+            out['largest_folders'] = [
+                {'folder': folder, 'size': size} for folder, size in rec['folders']
+            ]
+    return out
+
+
+def _section_table(title, columns):
+    table = Table(title=title, title_justify="left", show_edge=False, pad_edge=False)
+    for name, justify in columns:
+        table.add_column(name, justify=justify, overflow="fold")
+    return table
+
+
+def _render_recommendations_rich(recs, stream):
+    console = Console(file=stream)
+    for rec in recs:
+        kind = rec['type']
+        if kind == 'largest_files':
+            table = _section_table("Largest files", [("Size", "right"), ("Path", "left")])
+            for f in rec['files']:
+                table.add_row(format_size(f['size']), f['path'])
+            console.print(table)
+        elif kind == 'file_type_breakdown':
+            table = _section_table("File type breakdown", [("Extension", "left"), ("Count", "right")])
+            for ext, count in rec['breakdown']:
+                table.add_row(ext or "(no extension)", str(count))
+            console.print(table)
+        elif kind == 'dormant_files':
+            table = _section_table("Dormant files (>180d, >50MB)", [("Size", "right"), ("Path", "left")])
+            for f in rec['files']:
+                table.add_row(format_size(f['size']), f['path'])
+            console.print(table)
+        elif kind == 'duplicate_groups':
+            console.print(f"[bold]Duplicate groups:[/bold] {len(rec['groups'])}")
+            for i, group in enumerate(rec['groups'], 1):
+                table = _section_table(f"Group {i}", [("Size", "right"), ("Path", "left")])
+                for f in group:
+                    table.add_row(format_size(f['size']), f['path'])
+                console.print(table)
+        elif kind == 'largest_folders':
+            table = _section_table("Largest folders", [("Size", "right"), ("Folder", "left")])
+            for folder, size in rec['folders']:
+                table.add_row(format_size(size), folder)
+            console.print(table)
+
+
+def render_recommendations(recs, plain=False, as_json=False, stream=None):
+    stream = sys.stdout if stream is None else stream
+    if as_json:
+        json.dump(recommendations_json(recs), stream, indent=2)
+        stream.write("\n")
+        return
+    if _should_use_rich(stream, plain):
+        _render_recommendations_rich(recs, stream)
+        return
+    for rec in recs:
+        kind = rec['type']
+        if kind == 'largest_files':
+            print("Largest files:", file=stream)
+            for f in rec['files']:
+                print(f"  {format_size(f['size']):>10}  {f['path']}", file=stream)
+        elif kind == 'file_type_breakdown':
+            print("File type breakdown:", file=stream)
+            for ext, count in rec['breakdown']:
+                # ext already includes its leading dot; printing ".{ext}" here
+                # was the source of the doubled-dot "..mp4" bug.
+                print(f"  {ext or '(no extension)'}: {count}", file=stream)
+        elif kind == 'dormant_files':
+            print("Dormant files (>180d, >50MB):", file=stream)
+            for f in rec['files']:
+                print(f"  {format_size(f['size']):>10}  {f['path']}", file=stream)
+        elif kind == 'duplicate_groups':
+            print(f"Duplicate groups: {len(rec['groups'])}", file=stream)
+            for group in rec['groups']:
+                print("  Group:", file=stream)
+                for f in group:
+                    print(f"    {format_size(f['size']):>10}  {f['path']}", file=stream)
+        elif kind == 'largest_folders':
+            print("Largest folders:", file=stream)
+            for folder, size in rec['folders']:
+                print(f"  {format_size(size):>10}  {folder}", file=stream)
+
+
+def duplicates_json(groups):
+    return {
+        'group_count': len(groups),
+        'duplicate_count': sum(len(g) - 1 for g in groups),
+        'groups': [_files_json(g) for g in groups],
+    }
+
+
+def render_duplicates_json(groups, stream=None):
+    stream = sys.stdout if stream is None else stream
+    json.dump(duplicates_json(groups), stream, indent=2)
+    stream.write("\n")
+
+
+def render_duplicates(groups, plain=False, as_json=False, stream=None):
+    """Display the duplicate findings (the index column lets the caller's
+    interactive --apply flow reference each file)."""
+    stream = sys.stdout if stream is None else stream
+    if as_json:
+        render_duplicates_json(groups, stream)
+        return
+    if not groups:
+        print("No duplicate files found.", file=stream)
+        return
+    header = f"Found {sum(len(g) - 1 for g in groups)} duplicate files in {len(groups)} groups:"
+    if _should_use_rich(stream, plain):
+        console = Console(file=stream)
+        console.print(header)
+        for i, group in enumerate(groups, 1):
+            table = _section_table(f"Group {i}", [("Idx", "right"), ("Size", "right"), ("Path", "left")])
+            for idx, f in enumerate(group):
+                table.add_row(str(idx), format_size(f['size']), f['path'])
+            console.print(table)
+        return
+    print(header, file=stream)
+    for i, group in enumerate(groups, 1):
+        print(f"  Group {i}:", file=stream)
+        for idx, f in enumerate(group):
+            print(f"    [{idx}] {f['path']} ({format_size(f['size'])})", file=stream)
+
+
+def dormant_json(dormant_files):
+    return {
+        'count': len(dormant_files),
+        'files': [
+            {'path': f['path'], 'size': f['size'], 'last_accessed': f['last_accessed']}
+            for f in dormant_files
+        ],
+    }
+
+
+def render_dormant_json(dormant_files, stream=None):
+    stream = sys.stdout if stream is None else stream
+    json.dump(dormant_json(dormant_files), stream, indent=2)
+    stream.write("\n")
+
+
+def render_dormant(dormant_files, plain=False, as_json=False, stream=None):
+    stream = sys.stdout if stream is None else stream
+    if as_json:
+        render_dormant_json(dormant_files, stream)
+        return
+    if not dormant_files:
+        print("No large dormant files found.", file=stream)
+        return
+    header = f"Found {len(dormant_files)} large dormant files:"
+    if _should_use_rich(stream, plain):
+        console = Console(file=stream)
+        console.print(header)
+        table = _section_table("", [("Size", "right"), ("Last accessed", "right"), ("Path", "left")])
+        for f in dormant_files:
+            table.add_row(format_size(f['size']), format_time(f['last_accessed']), f['path'])
+        console.print(table)
+        return
+    print(header, file=stream)
+    for f in dormant_files:
+        print(f"  {f['path']} | {format_size(f['size'])} | Last accessed: {format_time(f['last_accessed'])}", file=stream)
+
+
+def organization_json(suggestions):
+    return {
+        'count': len(suggestions),
+        'moves': [
+            {
+                'source': s['source'],
+                'target': s['target'],
+                'category': s['category'],
+                'group': s.get('group'),
+            }
+            for s in suggestions
+        ],
+    }
+
+
+def render_organization(suggestions, plain=False, as_json=False, stream=None):
+    stream = sys.stdout if stream is None else stream
+    if as_json:
+        json.dump(organization_json(suggestions), stream, indent=2)
+        stream.write("\n")
+        return
+    if not suggestions:
+        print("No files to organize.", file=stream)
+        return
+    header = f"Suggest moving {len(suggestions)} files:"
+    if _should_use_rich(stream, plain):
+        console = Console(file=stream)
+        console.print(header)
+        table = _section_table("", [("Category", "left"), ("From", "left"), ("To", "left")])
+        for s in suggestions:
+            table.add_row(s['category'], s['source'], s['target'])
+        console.print(table)
+        return
+    print(header, file=stream)
+    for s in suggestions:
+        print(f"  {s['source']} -> {s['target']}  [{s['category']}]", file=stream)
+
+
+def render_apply_summary(summary_line, items=None, columns=None, plain=False, stream=None, border_style="green"):
+    """Pretty end-of-operation summary for destructive flows: a table of the
+    affected files plus a styled summary line, with a plain fallback. Used for
+    both completed --apply runs (green) and --dry-run previews (yellow)."""
+    stream = sys.stdout if stream is None else stream
+    if _should_use_rich(stream, plain):
+        console = Console(file=stream)
+        if items and columns:
+            table = _section_table("", columns)
+            for row in items:
+                table.add_row(*row)
+            console.print(table)
+        console.print(Panel(summary_line, expand=False, border_style=border_style))
+        return
+    if items:
+        for row in items:
+            print("  " + "  ".join(row), file=stream)
+    print(summary_line, file=stream)

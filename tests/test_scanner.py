@@ -1,5 +1,15 @@
 from sorta.scanner import FileScanner
 
+
+def test_scan_progress_callback_reports_final_count(tmp_path):
+    for i in range(3):
+        (tmp_path / f"f{i}.txt").write_text("x")
+    seen = []
+    files = FileScanner(str(tmp_path)).scan(progress_callback=seen.append)
+    # The callback must at least report the final total once.
+    assert seen and seen[-1] == len(files) == 3
+
+
 def test_scan(tmp_path):
     # Create some files
     f1 = tmp_path / "file1.txt"

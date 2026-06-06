@@ -29,6 +29,20 @@ def test_build_line_rejects_destructive_command(scheduler, tmp_path):
         scheduler.build_line("0 9 * * 1", str(tmp_path), "empty-trash")
 
 
+def test_build_line_with_report_appends_json_log(scheduler, tmp_path):
+    log = tmp_path / "sorta.log"
+    line = scheduler.build_line("0 9 * * 1", str(tmp_path), "recommend", report=str(log))
+    assert "--json" in line
+    assert ">>" in line and "sorta.log" in line
+    assert "2>&1" in line
+    assert line.endswith(CRON_MARKER)
+
+
+def test_build_line_rejects_newline_in_report(scheduler, tmp_path):
+    with pytest.raises(ScheduleError):
+        scheduler.build_line("0 9 * * 1", str(tmp_path), "recommend", report="/tmp/evil\n0 0 * * * x")
+
+
 def test_build_line_quotes_directory_with_spaces(scheduler, tmp_path):
     spaced = tmp_path / "my files"
     spaced.mkdir()

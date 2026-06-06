@@ -45,7 +45,7 @@ class FileScanner:
                 return True
         return False
 
-    def scan(self) -> List[Dict]:
+    def scan(self, progress_callback=None) -> List[Dict]:
         files_metadata = []
         # os.walk swallows directory-level errors by default, so a directory the
         # process cannot read (e.g. macOS privacy restrictions) would silently
@@ -79,4 +79,10 @@ class FileScanner:
                     # skipped but reported rather than swallowed silently.
                     self.skipped.append((filepath, str(e)))
                     continue
+                # Report progress periodically so a caller can show a live count
+                # without paying a callback per file on huge trees.
+                if progress_callback and len(files_metadata) % 200 == 0:
+                    progress_callback(len(files_metadata))
+        if progress_callback:
+            progress_callback(len(files_metadata))
         return files_metadata

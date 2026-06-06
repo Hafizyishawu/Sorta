@@ -24,7 +24,7 @@ Commands:
 - `restore [--list] [--file NAME]` — list or restore files from trash
 - `empty-trash` — permanently delete everything in trash
 - `recommend` — show insights (largest files/folders, type breakdown, duplicates, dormant)
-- `schedule --cron "<expr>" [--run CMD] [--remove] [--list] [--dry-run]` — manage a recurring sorta run via the user's crontab
+- `schedule --cron "<expr>" [--run CMD] [--report LOG] [--remove] [--list] [--dry-run]` — manage a recurring sorta run via the user's crontab. `--report LOG` appends each run's JSON output to a log file for an audit trail.
 
 Global flags:
 - `--json` — emit machine-readable JSON instead of formatted output (use for scripting and scheduled runs); returns the complete file set, not the human-view cap

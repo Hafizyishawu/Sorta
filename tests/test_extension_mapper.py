@@ -19,6 +19,22 @@ def test_document_subtypes_split_into_own_categories():
     assert ExtensionMapper.get_category('.epub') == 'ebook'
 
 
+def test_newly_added_extensions_are_captured():
+    assert ExtensionMapper.get_category('.webp') == 'image'
+    assert ExtensionMapper.get_category('.heic') == 'image'
+    assert ExtensionMapper.get_category('.m4a') == 'audio'
+    assert ExtensionMapper.get_category('.webm') == 'video'
+    assert ExtensionMapper.get_category('.html') == 'web'
+    assert ExtensionMapper.get_category('.css') == 'web'
+    assert ExtensionMapper.get_category('.zip') == 'archive'
+    assert ExtensionMapper.get_category('.tar') == 'archive'
+
+
+def test_web_and_archive_have_top_level_folders():
+    assert ExtensionMapper.get_folder('web') == 'Web'
+    assert ExtensionMapper.get_folder('archive') == 'Archives'
+
+
 def test_unknown_extension_is_other():
     assert ExtensionMapper.get_category('.xyz') == 'other'
 

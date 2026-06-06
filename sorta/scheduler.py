@@ -44,7 +44,7 @@ class Scheduler:
             )
         return " ".join(fields)
 
-    def build_line(self, cron_expr: str, directory: str, command: str) -> str:
+    def build_line(self, cron_expr: str, directory: str, command: str, report: Optional[str] = None) -> str:
         if command not in SAFE_COMMANDS:
             raise ScheduleError(
                 f"'{command}' is not schedulable. Choose one of: {', '.join(SAFE_COMMANDS)}. "
@@ -61,6 +61,13 @@ class Scheduler:
             f"{shlex.quote(self.python_executable)} -m {self.module} "
             f"{shlex.quote(directory)} {command}"
         )
+        if report:
+            report = os.path.abspath(report)
+            if "\n" in report or "\r" in report:
+                raise ScheduleError("report path must not contain newline characters")
+            # --json so the appended log is machine-readable; append (>>) so each
+            # scheduled run adds to the audit trail rather than overwriting it.
+            invocation += f" --json >> {shlex.quote(report)} 2>&1"
         return f"{cron_expr} {invocation} {CRON_MARKER}"
 
     def _strip_managed(self, lines: List[str]) -> List[str]:
@@ -90,8 +97,8 @@ class Scheduler:
         if result.returncode != 0:
             raise ScheduleError(f"could not write crontab: {result.stderr.strip()}")
 
-    def install(self, cron_expr: str, directory: str, command: str, dry_run: bool = False) -> str:
-        line = self.build_line(cron_expr, directory, command)
+    def install(self, cron_expr: str, directory: str, command: str, dry_run: bool = False, report: Optional[str] = None) -> str:
+        line = self.build_line(cron_expr, directory, command, report=report)
         if dry_run:
             return line
         merged = self.merge(self.read_crontab(), line)
