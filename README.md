@@ -1,13 +1,16 @@
 # Sorta
 
-Sorta is an intelligent AI-powered filesystem management system. It scans your filesystem, finds duplicate and dormant files, organizes files by type, and helps keep your storage optimized and tidy.
+Sorta is a command-line filesystem organizer. It scans your filesystem, finds duplicate and dormant files, organizes files by type, and helps keep your storage tidy.
 
 ## Features
-- Scans directories and collects file metadata
-- Detects duplicate files
-- Identifies large dormant files (with user permission to delete)
-- Organizes files into folders by type
-- Supports audio, video, image, document, app, and setup file types
+- Scans directories with a readable summary — rich tables in a terminal, plain text when piped, or JSON for scripts
+- Detects duplicate files (fast: first-chunk pre-hash + parallel hashing)
+- Identifies large dormant files
+- Organizes files into category folders: documents split into Word, Spreadsheets, Presentations, PDF, Text, and Ebooks (under a single `Documents/` parent), plus Images, Audio, Videos, Web, Archives, Applications, and Installers
+- Keyword-targeted deletion (`delete --match`)
+- Sends deletions to the native OS Trash by default, with a recoverable internal trash as fallback
+- Preview-first: `--dry-run` on destructive commands, `-y` to auto-confirm
+- Scheduled runs via cron, with an optional JSON audit log
 
 ## Usage
 ```bash
@@ -42,15 +45,29 @@ Deletions move files to a trash directory by default and can be restored until `
 Scheduled runs are restricted to read-only commands (default `recommend`): an unattended job has no one to confirm deletion prompts.
 
 ## Install
+Recommended (isolated, puts `sorta` on your PATH) — using [pipx](https://pipx.pypa.io):
 ```bash
-pip install -e .            # provides the `sorta` command
-pip install -e '.[enhanced]'  # also installs rich + send2trash (formatted output, native OS Trash)
+pipx install "sorta[enhanced] @ git+https://github.com/Hafizyishawu/Sorta.git"
 ```
+
+Or with pip (ideally inside a virtualenv):
+```bash
+pip install "sorta[enhanced] @ git+https://github.com/Hafizyishawu/Sorta.git"
+```
+
+`[enhanced]` pulls in `rich` (formatted output) and `send2trash` (native OS Trash). Omit it for a zero-dependency install with plain output and the internal recoverable trash.
+
+From a local clone:
+```bash
+pip install .            # or:  pip install '.[enhanced]'
+```
+
+Developing on Sorta? Use an editable install: `pip install -e '.[enhanced]'`.
 
 ## Requirements
 - Python 3.8+
-- pytest (for tests)
-- `rich` (optional) — enables formatted tables and panels in an interactive terminal; without it, output falls back to plain text. Install with `pip install -r requirements-optional.txt`.
+- Optional: `rich` (formatted tables/panels) and `send2trash` (native OS Trash) — installed by the `[enhanced]` extra above, or via `pip install -r requirements-optional.txt`. Without them, Sorta uses plain-text output and its internal recoverable trash.
+- `pytest` for the test suite.
 
 ## Roadmap
 - [x] File scanning
@@ -62,3 +79,4 @@ pip install -e '.[enhanced]'  # also installs rich + send2trash (formatted outpu
 - [x] Interactive CLI
 - [x] Scheduled runs (cron)
 - [x] CI (lint + tests)
+- [x] v2: unified renderer (rich/plain/JSON), keyword delete, native OS Trash, `--dry-run`, faster duplicate detection, document sub-categories, `sorta` command
