@@ -2,6 +2,8 @@
 
 Sorta is a command-line filesystem organizer. It scans your filesystem, finds duplicate and dormant files, organizes files by type, and helps keep your storage tidy.
 
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Features
 - Scans directories with a readable summary — rich tables in a terminal, plain text when piped, or JSON for scripts
 - Detects duplicate files (fast: first-chunk pre-hash + parallel hashing)
