@@ -1,0 +1,55 @@
+name: adversarial-review
+
+# Gate 3 of the defense-in-depth review setup: an independent adversarial review
+# of every PR. CI runners cannot reach a local model, so this gate uses the
+# Claude engine via ANTHROPIC_API_KEY (Anthropic commercial terms do not train on
+# inputs). Blocks the PR on HIGH+ findings and posts the findings as a comment.
+#
+# Required repo secret: ANTHROPIC_API_KEY
+# Third-party actions are pinned to commit SHAs (tags are mutable).
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Adversarial review
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -o pipefail
+          bash scripts/adversarial-review.sh \
+            --engine claude --threshold high \
+            --base "origin/${{ github.base_ref }}" | tee review.out
+
+      - name: Comment findings on PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### Adversarial review (Gate 3)"
+            echo
+            echo '```'
+            cat review.out 2>/dev/null || echo "(no review output)"
+            echo '```'
+          } > body.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file body.md || true
