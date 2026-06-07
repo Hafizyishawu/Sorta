@@ -35,18 +35,35 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          set -o pipefail
+          # Graceful degradation: block ONLY on a real finding (exit 1). A reviewer
+          # that cannot run (exit 2 — e.g. no API credit) warns but does not wall
+          # off the PR. exit 0 = clean.
+          set +e
           bash scripts/adversarial-review.sh \
             --engine claude --threshold high \
-            --base "origin/${{ github.base_ref }}" | tee review.out
+            --base "origin/${{ github.base_ref }}" 2>&1 | tee review.out
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 2 ]; then
+            echo "::warning::Adversarial reviewer unavailable (exit 2) — PR not blocked, but not reviewed."
+          fi
+          [ "$rc" -eq 1 ] && exit 1 || exit 0
 
       - name: Comment findings on PR
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          rc="${{ steps.review.outputs.rc }}"
           {
-            echo "### Adversarial review (Gate 3)"
+            if [ "$rc" = "2" ]; then
+              echo "### ⚠️ Adversarial review — reviewer unavailable"
+              echo
+              echo "The reviewer could not run (e.g. no API credit). **Not blocking**, but this PR was not reviewed."
+            else
+              echo "### Adversarial review (Gate 3)"
+            fi
             echo
             echo '```'
             cat review.out 2>/dev/null || echo "(no review output)"
