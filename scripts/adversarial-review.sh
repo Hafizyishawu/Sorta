@@ -19,7 +19,7 @@
 # Exit: 0 = PASS, 1 = BLOCK (finding >= threshold), 2 = usage/error.
 set -euo pipefail
 
-ENGINE="claude"
+ENGINE="local"   # default to the private, no-credit local engine; opt into --engine claude
 THRESHOLD="high"
 MODE="working"
 BASE=""
@@ -125,5 +125,15 @@ PY
 esac
 
 printf '%s\n' "$OUT"
-grep -qE '^VERDICT:[[:space:]]*BLOCK' <<<"$OUT" && exit 1
-exit 0
+
+# Loud-fail: a missing VERDICT means the reviewer errored or returned nothing
+# usable (e.g. no API credit, model unreachable). Never treat that as a silent
+# PASS — exit 2 so each gate decides how to handle an unavailable reviewer.
+if grep -qE '^VERDICT:[[:space:]]*BLOCK' <<<"$OUT"; then
+  exit 1
+elif grep -qE '^VERDICT:[[:space:]]*PASS' <<<"$OUT"; then
+  exit 0
+else
+  echo "[review] no VERDICT produced — reviewer failed or returned nothing usable (engine: ${ENGINE})" >&2
+  exit 2
+fi
